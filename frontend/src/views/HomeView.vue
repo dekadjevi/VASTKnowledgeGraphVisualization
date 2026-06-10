@@ -3,11 +3,12 @@ import { useGraphStore } from '../stores/graph'
 import FilterSidebar from '../components/FilterSidebar.vue'
 import DistributionPanel from '../components/DistributionPanel.vue'
 import DashboardCard from '../components/DashboardCard.vue'
+import NodeLinkView from '../components/NodeLinkView.vue'
 
 const graph = useGraphStore()
 
+// The node-link card is a live component sitting in the grid; the rest stay placeholders.
 const cards = [
-  { title: 'Node-link diagram', subtitle: 'Graph visualization', content: 'Placeholder for a node-link diagram of the knowledge graph.' },
   { title: 'Sankey diagram', subtitle: 'Graph visualization', content: 'Placeholder for a Sankey diagram focused on types.' },
   { title: 'Connected components', subtitle: 'Community discovery', content: 'Overview of connected components, with node/edge counts per component.' },
   { title: 'Ego network', subtitle: 'Neighborhood from a node', content: 'Placeholder for an ego-network view around a selected node.' },
@@ -30,7 +31,7 @@ const cards = [
         <DistributionPanel />
       </div>
 
-      <!-- Visualization grid (T0 cards, now filter-driven) -->
+      <!-- Visualization grid: node-link is the first card, others are placeholders -->
       <p class="mt-5 mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
         Visualization grid
       </p>
@@ -38,6 +39,7 @@ const cards = [
         class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
         :class="graph.hasData ? '' : 'opacity-45'"
       >
+        <NodeLinkView />
         <DashboardCard
           v-for="card in cards"
           :key="card.title"

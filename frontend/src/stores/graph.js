@@ -134,6 +134,44 @@ export const useGraphStore = defineStore('graph', () => {
     i === -1 ? a.push(key) : a.splice(i, 1)
   }
 
+  // Drawable subgraph for the node-link / ego views (server-computed, D10/D12).
+  const subgraph = ref(null) // { nodes, links, truncated, node_count, link_count }
+  const subgraphLoading = ref(false)
+  const subgraphError = ref(null)
+
+  // Fetch a slice from the backend. Filter mode uses the active node types +
+  // a node budget; ego mode centers on a node id. Degree is computed on the
+  // FULL graph server-side, so the slice isn't structurally distorted.
+  async function fetchSubgraph({ ego = null, radius = 1, limit = 300 } = {}) {
+    if (!hasData.value) return
+    // Empty selection renders nothing (filter mode); ego mode is exempt.
+    if (!ego && filters.value.activeNodeTypes.length === 0) {
+      subgraph.value = null
+      return
+    }
+    subgraphLoading.value = true
+    subgraphError.value = null
+    try {
+      const params = new URLSearchParams({ limit: String(limit) })
+      if (ego) {
+        params.set('ego', ego)
+        params.set('radius', String(radius))
+      } else {
+        params.set('node_types', filters.value.activeNodeTypes.join(','))
+        if (filters.value.activeLinkTypes.length) {
+          params.set('link_types', filters.value.activeLinkTypes.join(','))
+        }
+      }
+      const res = await fetch(`${API_BASE}/subgraph/${graphId.value}?${params}`)
+      if (!res.ok) throw new Error(`Subgraph request failed (${res.status})`)
+      subgraph.value = await res.json()
+    } catch (e) {
+      subgraphError.value = e.message
+    } finally {
+      subgraphLoading.value = false
+    }
+  }
+
   function reset() {
     graphId.value = null
     dataset.value = null
@@ -141,6 +179,8 @@ export const useGraphStore = defineStore('graph', () => {
     linkTypes.value = []
     degreeCentrality.value = []
     totals.value = { nodes: 0, edges: 0 }
+    subgraph.value = null
+    subgraphError.value = null
     error.value = null
   }
 
@@ -148,6 +188,7 @@ export const useGraphStore = defineStore('graph', () => {
     graphId, dataset, loading, error,
     nodeTypes, linkTypes, degreeCentrality, totals, filters, capabilities,
     hasData, nodesByType, edgesByType, counts,
-    loadDataset, loadDefault, toggleNodeType, toggleLinkType, reset,
+    subgraph, subgraphLoading, subgraphError,
+    loadDataset, loadDefault, toggleNodeType, toggleLinkType, fetchSubgraph, reset,
   }
 })
