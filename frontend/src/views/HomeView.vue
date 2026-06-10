@@ -1,51 +1,62 @@
 <script setup>
+import { useGraphStore } from '../stores/graph'
+import FilterSidebar from '../components/FilterSidebar.vue'
+import DistributionPanel from '../components/DistributionPanel.vue'
 import DashboardCard from '../components/DashboardCard.vue'
 
+const graph = useGraphStore()
+
 const cards = [
-  {
-    title: 'Node-link diagram',
-    subtitle: 'Graph Visualization',
-    content: 'Placeholder for a node-link diagram visualization of the knowledge graph.',
-  },
-  {
-    title: 'Sankey Diagram',
-    subtitle: 'Graph Visualization',
-    content: 'Placeholder for a Sankey diagram visualization of the knowledge graph focused on types.',
-  },
-  {
-    title: 'Connected components',
-    subtitle: 'View for community discovery/connected componetns',
-    content: 'High-level overview of the connected components in the knowledge graph, showing the number of nodes and edges in each component.',
-  },
-  {
-    title: 'Ego Network',
-    subtitle: 'Neighborhood exploration from a node',
-    content: 'Placeholder for an ego network visualization that allows users to explore the neighborhood of a specific node in the knowledge graph.',
-  },
-  {
-    title: 'Spatial/Geographic view (?)',
-    subtitle: 'Geographical projection of data',
-    content: 'Placeholder for a spatial or geographic view that projects the knowledge graph data onto a map, showing the geographical distribution of entities and relationships.',
-  },
-  {
-    title: 'Temporal view (?)',
-    subtitle: 'Temporal projection of data',
-    content: 'Placeholder for a temporal view that shows the evolution of the knowledge graph over time, allowing users to see how entities and relationships have changed or developed.',
-  }
-
-
+  { title: 'Node-link diagram', subtitle: 'Graph visualization', content: 'Placeholder for a node-link diagram of the knowledge graph.' },
+  { title: 'Sankey diagram', subtitle: 'Graph visualization', content: 'Placeholder for a Sankey diagram focused on types.' },
+  { title: 'Connected components', subtitle: 'Community discovery', content: 'Overview of connected components, with node/edge counts per component.' },
+  { title: 'Ego network', subtitle: 'Neighborhood from a node', content: 'Placeholder for an ego-network view around a selected node.' },
+  { title: 'Spatial / geographic view (?)', subtitle: 'Geographic projection', content: 'Optional map projection of entities and relationships.' },
+  { title: 'Temporal view (?)', subtitle: 'Temporal projection', content: 'Optional timeline of how the graph evolves.' },
 ]
 </script>
 
 <template>
-  <section class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-    <DashboardCard
-      v-for="card in cards"
-      :key="card.title"
-      :title="card.title"
-      :subtitle="card.subtitle"
-    >
-      {{ card.content }}
-    </DashboardCard>
-  </section>
+  <!-- D1/D4: persistent sidebar + main; empty and loaded share one layout -->
+  <div class="grid grid-cols-1 gap-0 md:grid-cols-[210px_minmax(0,1fr)]">
+    <FilterSidebar class="rounded-l-xl" />
+
+    <div class="relative p-4">
+      <!-- Distributions strip (D2) -->
+      <p class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        Data distributions — filter feedback
+      </p>
+      <div :class="graph.hasData ? '' : 'opacity-45'">
+        <DistributionPanel />
+      </div>
+
+      <!-- Visualization grid (T0 cards, now filter-driven) -->
+      <p class="mt-5 mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        Visualization grid
+      </p>
+      <section
+        class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
+        :class="graph.hasData ? '' : 'opacity-45'"
+      >
+        <DashboardCard
+          v-for="card in cards"
+          :key="card.title"
+          :title="card.title"
+          :subtitle="card.subtitle"
+        >
+          {{ card.content }}
+        </DashboardCard>
+      </section>
+
+      <!-- Empty-state hint overlay (D4) -->
+      <div
+        v-if="!graph.hasData"
+        class="pointer-events-none absolute inset-4 flex items-center justify-center"
+      >
+        <span class="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 shadow-sm">
+          ← Load a dataset to populate these views
+        </span>
+      </div>
+    </div>
+  </div>
 </template>

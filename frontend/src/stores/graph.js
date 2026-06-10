@@ -1,0 +1,153 @@
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+
+// Base URL of the FastAPI backend (NetworkX Graph API). CORS on the API
+// already allows the Vite dev origin (localhost:5173).
+const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000'
+
+// Map the API's { "Person": 214, ... } objects into the array shape the
+// components iterate over. The type string is both the key and the label.
+function toTypeArray(countsObj = {}) {
+  return Object.entries(countsObj)
+    .map(([label, count]) => ({ key: label, label, count }))
+    .sort((a, b) => b.count - a.count)
+}
+
+// The /summary degree_centrality_distribution is an object of "lo-hi": count
+// plus a "stats" entry. Strip stats and return chartable bins.
+function toDegreeBins(dist = {}) {
+  return Object.entries(dist)
+    .filter(([k]) => k !== 'stats')
+    .map(([bin, count]) => ({ bin, count }))
+}
+
+export const useGraphStore = defineStore('graph', () => {
+  // ---- state -------------------------------------------------------------
+  const graphId = ref(null) // returned by POST /upload/ (D8: kept for GETs)
+  const dataset = ref(null) // { name } once loaded, else null
+  const loading = ref(false)
+  const error = ref(null)
+
+  const nodeTypes = ref([]) // [{ key, label, count }] from /node-types
+  const linkTypes = ref([]) // [{ key, label, count }] from /edge-types
+  const degreeCentrality = ref([]) // [{ bin, count }] from /summary
+  const totals = ref({ nodes: 0, edges: 0 })
+
+  // Filter selection. Node/link types are active (D8 client-side); confidence
+  // and time are placeholders with no backing data yet (D9).
+  const filters = ref({
+    activeNodeTypes: [],
+    activeLinkTypes: [],
+    confidenceRange: [0, 1],
+    timeRange: [null, null],
+  })
+
+  // What the current backend can actually support, drives the disabled
+  // "needs backend support" notes in the sidebar (D9).
+  const capabilities = ref({ types: true, properties: false, temporal: false })
+
+  // ---- getters -----------------------------------------------------------
+  const hasData = computed(() => dataset.value !== null)
+
+  // Type distributions with an `active` flag so the panel can dim filtered-out
+  // bars. Filtering is reactive — toggling a type updates these automatically.
+  const nodesByType = computed(() =>
+    nodeTypes.value.map((t) => ({ ...t, active: filters.value.activeNodeTypes.includes(t.key) })),
+  )
+  const edgesByType = computed(() =>
+    linkTypes.value.map((t) => ({ ...t, active: filters.value.activeLinkTypes.includes(t.key) })),
+  )
+
+  // Filter-feedback counts (D5): totals from the API, filtered computed locally.
+  const counts = computed(() => {
+    const filteredNodes = nodeTypes.value
+      .filter((t) => filters.value.activeNodeTypes.includes(t.key))
+      .reduce((sum, t) => sum + t.count, 0)
+    const filteredEdges = linkTypes.value
+      .filter((t) => filters.value.activeLinkTypes.includes(t.key))
+      .reduce((sum, t) => sum + t.count, 0)
+    return {
+      totalNodes: totals.value.nodes,
+      totalEdges: totals.value.edges,
+      filteredNodes,
+      filteredEdges,
+    }
+  })
+
+  // ---- actions -----------------------------------------------------------
+  // Fetch the three metadata endpoints for a given id and fill the store.
+  async function loadMetadata(id, name) {
+    const [nt, et, summary] = await Promise.all([
+      fetch(`${API_BASE}/node-types/${id}`).then((r) => r.json()),
+      fetch(`${API_BASE}/edge-types/${id}`).then((r) => r.json()),
+      fetch(`${API_BASE}/summary/${id}`).then((r) => r.json()),
+    ])
+    graphId.value = id
+    dataset.value = { name }
+    nodeTypes.value = toTypeArray(nt.node_type_counts)
+    linkTypes.value = toTypeArray(et.edge_type_counts)
+    totals.value = { nodes: nt.total_nodes ?? 0, edges: et.total_edges ?? 0 }
+    degreeCentrality.value = toDegreeBins(summary?.degree_properties?.degree_centrality_distribution)
+    filters.value.activeNodeTypes = nodeTypes.value.map((t) => t.key)
+    filters.value.activeLinkTypes = linkTypes.value.map((t) => t.key)
+  }
+
+  // Two-step real workflow: POST /upload/ -> graph_id -> GET metadata.
+  async function loadDataset(file) {
+    loading.value = true
+    error.value = null
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(`${API_BASE}/upload/`, { method: 'POST', body: form })
+      if (!res.ok) throw new Error(`Upload failed (${res.status})`)
+      const { graph_id } = await res.json()
+      await loadMetadata(graph_id, file.name)
+    } catch (e) {
+      error.value = e.message
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // Load the API's preconfigured "default" graph without uploading a file.
+  async function loadDefault() {
+    loading.value = true
+    error.value = null
+    try {
+      await loadMetadata('default', 'default graph')
+    } catch (e) {
+      error.value = e.message
+    } finally {
+      loading.value = false
+    }
+  }
+
+  function toggleNodeType(key) {
+    const a = filters.value.activeNodeTypes
+    const i = a.indexOf(key)
+    i === -1 ? a.push(key) : a.splice(i, 1)
+  }
+  function toggleLinkType(key) {
+    const a = filters.value.activeLinkTypes
+    const i = a.indexOf(key)
+    i === -1 ? a.push(key) : a.splice(i, 1)
+  }
+
+  function reset() {
+    graphId.value = null
+    dataset.value = null
+    nodeTypes.value = []
+    linkTypes.value = []
+    degreeCentrality.value = []
+    totals.value = { nodes: 0, edges: 0 }
+    error.value = null
+  }
+
+  return {
+    graphId, dataset, loading, error,
+    nodeTypes, linkTypes, degreeCentrality, totals, filters, capabilities,
+    hasData, nodesByType, edgesByType, counts,
+    loadDataset, loadDefault, toggleNodeType, toggleLinkType, reset,
+  }
+})
