@@ -4,12 +4,12 @@ import FilterSidebar from '../components/FilterSidebar.vue'
 import DistributionPanel from '../components/DistributionPanel.vue'
 import DashboardCard from '../components/DashboardCard.vue'
 import NodeLinkView from '../components/NodeLinkView.vue'
+import SankeyView from '../components/SankeyView.vue'
 
 const graph = useGraphStore()
 
-// The node-link card is a live component sitting in the grid; the rest stay placeholders.
+// Live components sit in the grid; the rest stay placeholders.
 const cards = [
-  { title: 'Sankey diagram', subtitle: 'Graph visualization', content: 'Placeholder for a Sankey diagram focused on types.' },
   { title: 'Connected components', subtitle: 'Community discovery', content: 'Overview of connected components, with node/edge counts per component.' },
   { title: 'Ego network', subtitle: 'Neighborhood from a node', content: 'Placeholder for an ego-network view around a selected node.' },
   { title: 'Spatial / geographic view (?)', subtitle: 'Geographic projection', content: 'Optional map projection of entities and relationships.' },
@@ -31,7 +31,7 @@ const cards = [
         <DistributionPanel />
       </div>
 
-      <!-- Visualization grid: node-link is the first card, others are placeholders -->
+      <!-- Visualization grid: node-link and Sankey are live; others are placeholders -->
       <p class="mt-5 mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
         Visualization grid
       </p>
@@ -40,6 +40,7 @@ const cards = [
         :class="graph.hasData ? '' : 'opacity-45'"
       >
         <NodeLinkView />
+        <SankeyView />
         <DashboardCard
           v-for="card in cards"
           :key="card.title"

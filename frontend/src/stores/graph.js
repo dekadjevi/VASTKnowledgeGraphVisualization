@@ -139,6 +139,38 @@ export const useGraphStore = defineStore('graph', () => {
   const subgraphLoading = ref(false)
   const subgraphError = ref(null)
 
+  // Type-level metagraph for the Sankey (server-computed aggregate flows).
+  const typeFlows = ref(null) // { flows: [{source_type, edge_type, target_type, count}] }
+  const typeFlowsError = ref(null)
+
+  async function fetchTypeFlows(top = 12) {
+    if (!hasData.value) return
+    typeFlowsError.value = null
+    try {
+      const res = await fetch(`${API_BASE}/type-flows/${graphId.value}?top=${top}`)
+      if (!res.ok) throw new Error(`Type-flows request failed (${res.status})`)
+      typeFlows.value = await res.json()
+    } catch (e) {
+      typeFlowsError.value = e.message
+    }
+  }
+
+  // Cross-filter: clicking a Sankey ribbon ticks the matching types in the
+  // sidebar and redraws the node-link diagram to that slice (overview -> detail).
+  async function focusTypeFlow(flow) {
+    filters.value.activeNodeTypes = Array.from(new Set([flow.source_type, flow.target_type]))
+    filters.value.activeLinkTypes = [flow.edge_type]
+    await fetchSubgraph({ limit: 300 })
+  }
+
+  // Flexible variant used by the 3-column Sankey, where a clicked segment maps
+  // to a set of node types and link types rather than a single triple.
+  async function focusTypes(nodeTypes, linkTypes) {
+    filters.value.activeNodeTypes = Array.from(new Set(nodeTypes))
+    filters.value.activeLinkTypes = Array.from(new Set(linkTypes))
+    await fetchSubgraph({ limit: 300 })
+  }
+
   // Fetch a slice from the backend. Filter mode uses the active node types +
   // a node budget; ego mode centers on a node id. Degree is computed on the
   // FULL graph server-side, so the slice isn't structurally distorted.
@@ -181,6 +213,8 @@ export const useGraphStore = defineStore('graph', () => {
     totals.value = { nodes: 0, edges: 0 }
     subgraph.value = null
     subgraphError.value = null
+    typeFlows.value = null
+    typeFlowsError.value = null
     error.value = null
   }
 
@@ -189,6 +223,8 @@ export const useGraphStore = defineStore('graph', () => {
     nodeTypes, linkTypes, degreeCentrality, totals, filters, capabilities,
     hasData, nodesByType, edgesByType, counts,
     subgraph, subgraphLoading, subgraphError,
-    loadDataset, loadDefault, toggleNodeType, toggleLinkType, fetchSubgraph, reset,
+    typeFlows, typeFlowsError,
+    loadDataset, loadDefault, toggleNodeType, toggleLinkType,
+    fetchSubgraph, fetchTypeFlows, focusTypeFlow, focusTypes, reset,
   }
 })
