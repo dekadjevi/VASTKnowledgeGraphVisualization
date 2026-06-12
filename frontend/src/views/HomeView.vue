@@ -5,13 +5,14 @@ import DistributionPanel from '../components/DistributionPanel.vue'
 import DashboardCard from '../components/DashboardCard.vue'
 import NodeLinkView from '../components/NodeLinkView.vue'
 import SankeyView from '../components/SankeyView.vue'
+import EgoNetworkView from '../components/EgoNetworkView.vue'
+import SearchBar from '../components/SearchBar.vue'
 
 const graph = useGraphStore()
 
-// Live components sit in the grid; the rest stay placeholders.
+// Remaining placeholder cards (live views are inlined below).
 const cards = [
   { title: 'Connected components', subtitle: 'Community discovery', content: 'Overview of connected components, with node/edge counts per component.' },
-  { title: 'Ego network', subtitle: 'Neighborhood from a node', content: 'Placeholder for an ego-network view around a selected node.' },
   { title: 'Spatial / geographic view (?)', subtitle: 'Geographic projection', content: 'Optional map projection of entities and relationships.' },
   { title: 'Temporal view (?)', subtitle: 'Temporal projection', content: 'Optional timeline of how the graph evolves.' },
 ]
@@ -23,6 +24,11 @@ const cards = [
     <FilterSidebar class="rounded-l-xl" />
 
     <div class="relative p-4">
+      <!-- Search strip (top of main area) -->
+      <div class="mb-4">
+        <SearchBar />
+      </div>
+
       <!-- Distributions strip (D2) -->
       <p class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
         Data distributions — filter feedback
@@ -31,7 +37,7 @@ const cards = [
         <DistributionPanel />
       </div>
 
-      <!-- Visualization grid: node-link and Sankey are live; others are placeholders -->
+      <!-- Visualization grid: live views first, placeholders after -->
       <p class="mt-5 mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
         Visualization grid
       </p>
@@ -41,6 +47,7 @@ const cards = [
       >
         <NodeLinkView />
         <SankeyView />
+        <EgoNetworkView />
         <DashboardCard
           v-for="card in cards"
           :key="card.title"
@@ -54,7 +61,7 @@ const cards = [
       <!-- Empty-state hint overlay (D4) -->
       <div
         v-if="!graph.hasData"
-        class="pointer-events-none absolute inset-4 flex items-center justify-center"
+        class="pointer-events-none absolute inset-x-4 bottom-4 top-28 flex items-center justify-center"
       >
         <span class="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 shadow-sm">
           ← Load a dataset to populate these views

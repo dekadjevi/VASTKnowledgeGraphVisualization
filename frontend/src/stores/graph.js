@@ -171,6 +171,52 @@ export const useGraphStore = defineStore('graph', () => {
     await fetchSubgraph({ limit: 300 })
   }
 
+  // ---- search + ego (drives the Ego Network card; node-link untouched) -----
+  const searchResults = ref([]) // [{ id, label, type }]
+  const searchLoading = ref(false)
+  const selectedNode = ref(null) // the chosen { id, label, type }
+  const egoGraph = ref(null) // ego subgraph for the Ego card (its own slot)
+  const egoLoading = ref(false)
+  const egoError = ref(null)
+
+  async function searchNodes(q) {
+    if (!hasData.value || !q.trim()) {
+      searchResults.value = []
+      return
+    }
+    searchLoading.value = true
+    try {
+      const res = await fetch(`${API_BASE}/search/${graphId.value}?q=${encodeURIComponent(q)}&limit=10`)
+      if (!res.ok) throw new Error(`Search failed (${res.status})`)
+      const data = await res.json()
+      searchResults.value = data.matches || []
+    } catch {
+      searchResults.value = []
+    } finally {
+      searchLoading.value = false
+    }
+  }
+
+  // Select an entity -> fetch its ego neighborhood into egoGraph. Reuses the
+  // existing /subgraph?ego= endpoint and never touches the node-link's subgraph.
+  async function selectNode(node, radius = 1) {
+    selectedNode.value = node
+    searchResults.value = []
+    egoLoading.value = true
+    egoError.value = null
+    try {
+      const res = await fetch(
+        `${API_BASE}/subgraph/${graphId.value}?ego=${encodeURIComponent(node.id)}&radius=${radius}&limit=300`,
+      )
+      if (!res.ok) throw new Error(`Ego request failed (${res.status})`)
+      egoGraph.value = await res.json()
+    } catch (e) {
+      egoError.value = e.message
+    } finally {
+      egoLoading.value = false
+    }
+  }
+
   // Fetch a slice from the backend. Filter mode uses the active node types +
   // a node budget; ego mode centers on a node id. Degree is computed on the
   // FULL graph server-side, so the slice isn't structurally distorted.
@@ -215,6 +261,10 @@ export const useGraphStore = defineStore('graph', () => {
     subgraphError.value = null
     typeFlows.value = null
     typeFlowsError.value = null
+    searchResults.value = []
+    selectedNode.value = null
+    egoGraph.value = null
+    egoError.value = null
     error.value = null
   }
 
@@ -224,7 +274,9 @@ export const useGraphStore = defineStore('graph', () => {
     hasData, nodesByType, edgesByType, counts,
     subgraph, subgraphLoading, subgraphError,
     typeFlows, typeFlowsError,
+    searchResults, searchLoading, selectedNode, egoGraph, egoLoading, egoError,
     loadDataset, loadDefault, toggleNodeType, toggleLinkType,
-    fetchSubgraph, fetchTypeFlows, focusTypeFlow, focusTypes, reset,
+    fetchSubgraph, fetchTypeFlows, focusTypeFlow, focusTypes,
+    searchNodes, selectNode, reset,
   }
 })
