@@ -92,7 +92,7 @@ export const useGraphStore = defineStore('graph', () => {
     filters.value.activeLinkTypes = linkTypes.value.map((t) => t.key)
   }
 
-  // Two-step real workflow: POST /upload/ -> graph_id -> GET metadata.
+  // Two-step real workflow: POST /upload/ -> graph_id -> normalize -> GET metadata.
   async function loadDataset(file) {
     loading.value = true
     error.value = null
@@ -102,6 +102,15 @@ export const useGraphStore = defineStore('graph', () => {
       const res = await fetch(`${API_BASE}/upload/`, { method: 'POST', body: form })
       if (!res.ok) throw new Error(`Upload failed (${res.status})`)
       const { graph_id } = await res.json()
+      // Standardize type keys for any schema (MC1 "Node Type"/"Edge Type",
+      // MC2 "type"/"role", etc.) BEFORE reading metadata. Must be awaited so the
+      // node/edge-type reads see the normalized graph. Non-fatal if it 404s on
+      // an older API build.
+      try {
+        await fetch(`${API_BASE}/normalize/${graph_id}`, { method: 'POST' })
+      } catch {
+        /* normalize is best-effort; metadata still loads */
+      }
       await loadMetadata(graph_id, file.name)
     } catch (e) {
       error.value = e.message
@@ -115,6 +124,12 @@ export const useGraphStore = defineStore('graph', () => {
     loading.value = true
     error.value = null
     try {
+      // Normalize the default graph too, in case it uses a non-standard schema.
+      try {
+        await fetch(`${API_BASE}/normalize/default`, { method: 'POST' })
+      } catch {
+        /* best-effort */
+      }
       await loadMetadata('default', 'default graph')
     } catch (e) {
       error.value = e.message
