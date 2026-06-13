@@ -220,9 +220,15 @@ export const useGraphStore = defineStore('graph', () => {
     egoLoading.value = true
     egoError.value = null
     try {
-      const res = await fetch(
-        `${API_BASE}/subgraph/${graphId.value}?ego=${encodeURIComponent(node.id)}&radius=${radius}&limit=300`,
-      )
+      const [tf, tt] = filters.value.timeRange
+      const params = new URLSearchParams({
+        ego: String(node.id),
+        radius: String(radius),
+        limit: '300',
+      })
+      if (tf) params.set('time_from', tf)
+      if (tt) params.set('time_to', tt)
+      const res = await fetch(`${API_BASE}/subgraph/${graphId.value}?${params}`)
       if (!res.ok) throw new Error(`Ego request failed (${res.status})`)
       egoGraph.value = await res.json()
     } catch (e) {
@@ -230,6 +236,49 @@ export const useGraphStore = defineStore('graph', () => {
     } finally {
       egoLoading.value = false
     }
+  }
+
+  // ---- timeline (adaptive temporal view; coordinated via selectedNode) -----
+  const timeline = ref(null) // { scope, source, time_field, granularity, buckets:[{key,count}] }
+  const timelineLoading = ref(false)
+  const timelineError = ref(null)
+  const timeDomain = ref([]) // ordered list of available bucket keys (whole graph)
+
+  // Fetch the activity-over-time histogram. With no ego it covers the whole
+  // graph; with an ego (the selected entity) it scopes to that neighborhood,
+  // so the Temporal card stays in sync with the Ego card. `bucket` is
+  // 'auto' | 'year' | 'month' | 'day'.
+  async function fetchTimeline({ ego = null, radius = 1, bucket = 'auto', groupBy = null } = {}) {
+    if (!hasData.value) return
+    timelineLoading.value = true
+    timelineError.value = null
+    try {
+      const params = new URLSearchParams({ bucket })
+      if (ego) {
+        params.set('ego', ego)
+        params.set('radius', String(radius))
+      }
+      if (groupBy) params.set('group_by', groupBy)
+      const res = await fetch(`${API_BASE}/timeline/${graphId.value}?${params}`)
+      if (!res.ok) throw new Error(`Timeline request failed (${res.status})`)
+      timeline.value = await res.json()
+      // Remember the full-graph time domain to drive the Time Range control.
+      if (!ego && !groupBy && timeline.value?.buckets?.length) {
+        timeDomain.value = timeline.value.buckets.map((b) => b.key)
+      }
+    } catch (e) {
+      timelineError.value = e.message
+    } finally {
+      timelineLoading.value = false
+    }
+  }
+
+  // Set the global time window [from, to] (bucket keys) and re-pull the views
+  // that respect it. Empty values clear the bound.
+  async function setTimeRange(from, to) {
+    filters.value.timeRange = [from || null, to || null]
+    await fetchSubgraph({ limit: 300 })
+    if (selectedNode.value) await selectNode(selectedNode.value)
   }
 
   // Fetch a slice from the backend. Filter mode uses the active node types +
@@ -255,6 +304,9 @@ export const useGraphStore = defineStore('graph', () => {
           params.set('link_types', filters.value.activeLinkTypes.join(','))
         }
       }
+      const [tf, tt] = filters.value.timeRange
+      if (tf) params.set('time_from', tf)
+      if (tt) params.set('time_to', tt)
       const res = await fetch(`${API_BASE}/subgraph/${graphId.value}?${params}`)
       if (!res.ok) throw new Error(`Subgraph request failed (${res.status})`)
       subgraph.value = await res.json()
@@ -280,6 +332,10 @@ export const useGraphStore = defineStore('graph', () => {
     selectedNode.value = null
     egoGraph.value = null
     egoError.value = null
+    timeline.value = null
+    timelineError.value = null
+    timeDomain.value = []
+    filters.value.timeRange = [null, null]
     error.value = null
   }
 
@@ -290,8 +346,9 @@ export const useGraphStore = defineStore('graph', () => {
     subgraph, subgraphLoading, subgraphError,
     typeFlows, typeFlowsError,
     searchResults, searchLoading, selectedNode, egoGraph, egoLoading, egoError,
+    timeline, timelineLoading, timelineError, timeDomain,
     loadDataset, loadDefault, toggleNodeType, toggleLinkType,
     fetchSubgraph, fetchTypeFlows, focusTypeFlow, focusTypes,
-    searchNodes, selectNode, reset,
+    searchNodes, selectNode, fetchTimeline, setTimeRange, reset,
   }
 })

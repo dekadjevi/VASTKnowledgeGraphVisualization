@@ -1,10 +1,25 @@
 <script setup>
+import { ref } from 'vue'
 import { useGraphStore } from '../stores/graph'
 import DatasetLoader from './DatasetLoader.vue'
 
 const graph = useGraphStore()
 // Filtering is reactive client-side (D8): toggling mutates the filter arrays
 // and the store's computed counts/distributions update on their own.
+
+// Time range: two bound selectors over the available temporal domain. Applying
+// re-pulls the graph views through the store (which forwards the window to the
+// /subgraph time filter); clearing resets to the full span.
+const from = ref('')
+const to = ref('')
+function apply() {
+  graph.setTimeRange(from.value, to.value)
+}
+function clear() {
+  from.value = ''
+  to.value = ''
+  graph.setTimeRange('', '')
+}
 </script>
 
 <template>
@@ -72,15 +87,41 @@ const graph = useGraphStore()
       <p class="mt-1 text-[10px] italic text-slate-400">needs backend support</p>
     </section>
 
-    <!-- Time range — visible but disabled until the backend exposes it (D9) -->
-    <section class="pointer-events-none opacity-40">
+    <!-- Time range — live once a temporal domain is known; filters all graph views -->
+    <section :class="graph.timeDomain.length ? '' : 'pointer-events-none opacity-40'">
       <p class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Time range</p>
       <div class="flex items-center gap-2 text-[11px] text-slate-600">
-        <span class="flex-1 rounded-md border border-slate-200 py-1 text-center">—</span>
+        <select
+          v-model="from"
+          class="flex-1 rounded-md border border-slate-300 bg-white py-1 text-center"
+          @change="apply"
+        >
+          <option value="">earliest</option>
+          <option v-for="k in graph.timeDomain" :key="'f' + k" :value="k">{{ k }}</option>
+        </select>
         <span class="text-slate-400">→</span>
-        <span class="flex-1 rounded-md border border-slate-200 py-1 text-center">—</span>
+        <select
+          v-model="to"
+          class="flex-1 rounded-md border border-slate-300 bg-white py-1 text-center"
+          @change="apply"
+        >
+          <option value="">latest</option>
+          <option v-for="k in graph.timeDomain" :key="'t' + k" :value="k">{{ k }}</option>
+        </select>
       </div>
-      <p class="mt-1 text-[10px] italic text-slate-400">needs backend support</p>
+      <div class="mt-1 flex items-center justify-between">
+        <p class="text-[10px] italic text-slate-400">
+          {{ graph.timeDomain.length ? 'filters all graph views' : 'needs time data' }}
+        </p>
+        <button
+          v-if="from || to"
+          type="button"
+          class="text-[10px] text-sky-600 hover:text-sky-800"
+          @click="clear"
+        >
+          clear
+        </button>
+      </div>
     </section>
   </aside>
 </template>
