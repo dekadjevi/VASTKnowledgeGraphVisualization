@@ -76,6 +76,37 @@ function clear() {
       </div>
     </section>
 
+    <!-- Evidence type — only for graphs whose edges carry is_inferred (MC3):
+         separate observed relationships from inferred ones. -->
+    <section v-if="graph.capabilities.hasInferred">
+      <p class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        Evidence type
+      </p>
+      <div class="flex gap-1 text-[11px]">
+        <button
+          v-for="opt in [
+            { k: 'all', label: 'All' },
+            { k: 'observed', label: 'Observed' },
+            { k: 'inferred', label: 'Inferred' },
+          ]"
+          :key="opt.k"
+          type="button"
+          class="flex-1 rounded-md border px-1.5 py-1"
+          :class="
+            graph.filters.inferred === opt.k
+              ? 'border-sky-500 bg-sky-50 text-sky-700'
+              : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+          "
+          @click="graph.setInferred(opt.k)"
+        >
+          {{ opt.label }}
+        </button>
+      </div>
+      <p class="mt-1 text-[10px] italic text-slate-400">
+        observed vs. inferred relationships
+      </p>
+    </section>
+
     <!-- Properties (P) — visible but disabled until the backend exposes them (D9) -->
     <section class="pointer-events-none opacity-40">
       <p class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Properties — P</p>

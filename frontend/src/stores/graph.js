@@ -40,11 +40,13 @@ export const useGraphStore = defineStore('graph', () => {
     activeLinkTypes: [],
     confidenceRange: [0, 1],
     timeRange: [null, null],
+    inferred: 'all', // 'all' | 'observed' | 'inferred' — edge evidence type (MC3)
   })
 
   // What the current backend can actually support, drives the disabled
-  // "needs backend support" notes in the sidebar (D9).
-  const capabilities = ref({ types: true, properties: false, temporal: false })
+  // "needs backend support" notes in the sidebar (D9). hasInferred lights up
+  // the evidence-type control only for graphs whose edges carry is_inferred.
+  const capabilities = ref({ types: true, properties: false, temporal: false, hasInferred: false })
 
   // ---- getters -----------------------------------------------------------
   const hasData = computed(() => dataset.value !== null)
@@ -90,6 +92,9 @@ export const useGraphStore = defineStore('graph', () => {
     degreeCentrality.value = toDegreeBins(summary?.degree_properties?.degree_centrality_distribution)
     filters.value.activeNodeTypes = nodeTypes.value.map((t) => t.key)
     filters.value.activeLinkTypes = linkTypes.value.map((t) => t.key)
+    // Evidence-type capability (MC3): only show the control when edges carry it.
+    capabilities.value.hasInferred = et.has_inferred === true
+    filters.value.inferred = 'all'
   }
 
   // Two-step real workflow: POST /upload/ -> graph_id -> normalize -> GET metadata.
@@ -228,6 +233,8 @@ export const useGraphStore = defineStore('graph', () => {
       })
       if (tf) params.set('time_from', tf)
       if (tt) params.set('time_to', tt)
+      if (filters.value.inferred === 'inferred') params.set('inferred', 'true')
+      else if (filters.value.inferred === 'observed') params.set('inferred', 'false')
       const res = await fetch(`${API_BASE}/subgraph/${graphId.value}?${params}`)
       if (!res.ok) throw new Error(`Ego request failed (${res.status})`)
       egoGraph.value = await res.json()
@@ -243,6 +250,11 @@ export const useGraphStore = defineStore('graph', () => {
   const timelineLoading = ref(false)
   const timelineError = ref(null)
   const timeDomain = ref([]) // ordered list of available bucket keys (whole graph)
+
+  // ---- spatial / geographic (place nodes plotted on a basemap) ------------
+  const geo = ref(null) // { spatial, points:[{id,label,type,x,y,zone,degree}], links }
+  const geoLoading = ref(false)
+  const geoError = ref(null)
 
   // Fetch the activity-over-time histogram. With no ego it covers the whole
   // graph; with an ego (the selected entity) it scopes to that neighborhood,
@@ -281,6 +293,32 @@ export const useGraphStore = defineStore('graph', () => {
     if (selectedNode.value) await selectNode(selectedNode.value)
   }
 
+  // Set the edge evidence type ('all' | 'observed' | 'inferred') and re-pull
+  // the structural views (MC3: separate observed from inferred relationships).
+  async function setInferred(mode) {
+    filters.value.inferred = mode
+    await fetchSubgraph({ limit: 300 })
+    if (selectedNode.value) await selectNode(selectedNode.value)
+  }
+
+  // Fetch coordinate-bearing nodes for the spatial map. Sets geo.spatial=false
+  // when the dataset carries no coordinates (e.g. the music graph).
+  async function fetchGeo() {
+    if (!graphId.value) return
+    geoLoading.value = true
+    geoError.value = null
+    try {
+      const res = await fetch(`${API_BASE}/geo/${graphId.value}`)
+      if (!res.ok) throw new Error(`Geo request failed (${res.status})`)
+      geo.value = await res.json()
+    } catch (e) {
+      geoError.value = e.message
+      geo.value = { spatial: false, points: [], links: [] }
+    } finally {
+      geoLoading.value = false
+    }
+  }
+
   // Fetch a slice from the backend. Filter mode uses the active node types +
   // a node budget; ego mode centers on a node id. Degree is computed on the
   // FULL graph server-side, so the slice isn't structurally distorted.
@@ -307,6 +345,8 @@ export const useGraphStore = defineStore('graph', () => {
       const [tf, tt] = filters.value.timeRange
       if (tf) params.set('time_from', tf)
       if (tt) params.set('time_to', tt)
+      if (filters.value.inferred === 'inferred') params.set('inferred', 'true')
+      else if (filters.value.inferred === 'observed') params.set('inferred', 'false')
       const res = await fetch(`${API_BASE}/subgraph/${graphId.value}?${params}`)
       if (!res.ok) throw new Error(`Subgraph request failed (${res.status})`)
       subgraph.value = await res.json()
@@ -336,6 +376,10 @@ export const useGraphStore = defineStore('graph', () => {
     timelineError.value = null
     timeDomain.value = []
     filters.value.timeRange = [null, null]
+    filters.value.inferred = 'all'
+    capabilities.value.hasInferred = false
+    geo.value = null
+    geoError.value = null
     error.value = null
   }
 
@@ -347,8 +391,9 @@ export const useGraphStore = defineStore('graph', () => {
     typeFlows, typeFlowsError,
     searchResults, searchLoading, selectedNode, egoGraph, egoLoading, egoError,
     timeline, timelineLoading, timelineError, timeDomain,
+    geo, geoLoading, geoError,
     loadDataset, loadDefault, toggleNodeType, toggleLinkType,
     fetchSubgraph, fetchTypeFlows, focusTypeFlow, focusTypes,
-    searchNodes, selectNode, fetchTimeline, setTimeRange, reset,
+    searchNodes, selectNode, fetchTimeline, setTimeRange, setInferred, fetchGeo, reset,
   }
 })

@@ -7,6 +7,7 @@ import NodeLinkView from '../components/NodeLinkView.vue'
 import SankeyView from '../components/SankeyView.vue'
 import EgoNetworkView from '../components/EgoNetworkView.vue'
 import TemporalView from '../components/TemporalView.vue'
+import SpatialView from '../components/SpatialView.vue'
 import SearchBar from '../components/SearchBar.vue'
 
 const graph = useGraphStore()
@@ -14,7 +15,6 @@ const graph = useGraphStore()
 // Remaining placeholder cards (live views are inlined below).
 const cards = [
   { title: 'Connected components', subtitle: 'Community discovery', content: 'Overview of connected components, with node/edge counts per component.' },
-  { title: 'Spatial / geographic view (?)', subtitle: 'Geographic projection', content: 'Optional map projection of entities and relationships.' },
 ]
 </script>
 
@@ -56,6 +56,9 @@ const cards = [
         >
           {{ card.content }}
         </DashboardCard>
+        <div class="rounded-xl border border-slate-200 bg-white p-4">
+          <SpatialView />
+        </div>
         <TemporalView />
       </section>
 
