@@ -95,6 +95,11 @@ export const useGraphStore = defineStore('graph', () => {
     // Evidence-type capability (MC3): only show the control when edges carry it.
     capabilities.value.hasInferred = et.has_inferred === true
     filters.value.inferred = 'all'
+    // Start every dataset in the default type-Sankey, then discover which node
+    // attributes can be grouped by (genre for the music graph, etc.).
+    flowGroupBy.value = 'Node Type'
+    flowFocus.value = null
+    fetchGroupableAttrs()
   }
 
   // Two-step real workflow: POST /upload/ -> graph_id -> normalize -> GET metadata.
@@ -162,12 +167,23 @@ export const useGraphStore = defineStore('graph', () => {
   // Type-level metagraph for the Sankey (server-computed aggregate flows).
   const typeFlows = ref(null) // { flows: [{source_type, edge_type, target_type, count}] }
   const typeFlowsError = ref(null)
+  // Sankey grouping dimension + drill-down. 'Node Type' = the default
+  // type->relationship->type view. Any other key buckets by that node attribute
+  // (e.g. genre). flowFocus restricts to flows leaving one source group value.
+  const flowGroupBy = ref('Node Type')
+  const flowFocus = ref(null)
+  const groupableAttrs = ref([]) // [{ key, coverage, distinct }] from /node-attributes
 
   async function fetchTypeFlows(top = 12) {
     if (!hasData.value) return
     typeFlowsError.value = null
     try {
-      const res = await fetch(`${API_BASE}/type-flows/${graphId.value}?top=${top}`)
+      const params = new URLSearchParams({ top: String(top) })
+      if (flowGroupBy.value && flowGroupBy.value !== 'Node Type') {
+        params.set('group_by', flowGroupBy.value)
+      }
+      if (flowFocus.value != null) params.set('focus_source', String(flowFocus.value))
+      const res = await fetch(`${API_BASE}/type-flows/${graphId.value}?${params}`)
       if (!res.ok) throw new Error(`Type-flows request failed (${res.status})`)
       typeFlows.value = await res.json()
     } catch (e) {
@@ -189,6 +205,33 @@ export const useGraphStore = defineStore('graph', () => {
     filters.value.activeNodeTypes = Array.from(new Set(nodeTypes))
     filters.value.activeLinkTypes = Array.from(new Set(linkTypes))
     await fetchSubgraph({ limit: 300 })
+  }
+
+  // Sankey grouping + drill-down (domain-agnostic: group_by is any node
+  // attribute the data carries; nothing about genre is hardcoded). These only
+  // mutate state -- the SankeyView watches them and re-fetches with its own
+  // current top-N, keeping the component the single owner of that control.
+  function setFlowGroupBy(key) {
+    flowGroupBy.value = key || 'Node Type'
+    flowFocus.value = null // switching dimension clears any active drill-down
+  }
+  function focusFlowSource(value) {
+    flowFocus.value = value // drill into one source group, e.g. a single genre
+  }
+  function clearFlowFocus() {
+    flowFocus.value = null // back to the full metagraph
+  }
+  // Which node attributes are categorical enough to group/colour by. Populates
+  // the Sankey's "group by" selector straight from the data.
+  async function fetchGroupableAttrs() {
+    if (!hasData.value) return
+    try {
+      const res = await fetch(`${API_BASE}/node-attributes/${graphId.value}`)
+      if (res.ok) groupableAttrs.value = (await res.json()).groupable || []
+      else groupableAttrs.value = []
+    } catch {
+      groupableAttrs.value = []
+    }
   }
 
   // ---- search + ego (drives the Ego Network card; node-link untouched) -----
@@ -368,6 +411,9 @@ export const useGraphStore = defineStore('graph', () => {
     subgraphError.value = null
     typeFlows.value = null
     typeFlowsError.value = null
+    flowGroupBy.value = 'Node Type'
+    flowFocus.value = null
+    groupableAttrs.value = []
     searchResults.value = []
     selectedNode.value = null
     egoGraph.value = null
@@ -389,11 +435,13 @@ export const useGraphStore = defineStore('graph', () => {
     hasData, nodesByType, edgesByType, counts,
     subgraph, subgraphLoading, subgraphError,
     typeFlows, typeFlowsError,
+    flowGroupBy, flowFocus, groupableAttrs,
     searchResults, searchLoading, selectedNode, egoGraph, egoLoading, egoError,
     timeline, timelineLoading, timelineError, timeDomain,
     geo, geoLoading, geoError,
     loadDataset, loadDefault, toggleNodeType, toggleLinkType,
     fetchSubgraph, fetchTypeFlows, focusTypeFlow, focusTypes,
+    setFlowGroupBy, focusFlowSource, clearFlowFocus, fetchGroupableAttrs,
     searchNodes, selectNode, fetchTimeline, setTimeRange, setInferred, fetchGeo, reset,
   }
 })

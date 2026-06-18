@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, computed } from 'vue'
 import * as d3 from 'd3'
 import { sankey, sankeyLinkHorizontal } from 'd3-sankey'
 import { useGraphStore } from '../stores/graph'
@@ -9,6 +9,12 @@ const svgRef = ref(null)
 const topN = ref(12)
 const expanded = ref(false)
 const caption = ref('Hover a relationship to trace its path · source type → edge type → target type · click to focus the node-link view')
+
+// Label for the current grouping dimension ('type' by default, else the attribute).
+const dimLabel = computed(() => {
+  const gb = graph.typeFlows?.group_by
+  return gb && gb !== 'Node Type' ? gb : 'type'
+})
 
 function render() {
   const svgEl = svgRef.value
@@ -85,6 +91,13 @@ function render() {
       caption.value = 'Hover a relationship to trace its path · source type → edge type → target type · click to focus the node-link view'
     })
     .on('click', (_e, d) => {
+      const grouped = graph.typeFlows?.group_by && graph.typeFlows.group_by !== 'Node Type'
+      if (grouped && d.side === 'left') {
+        // Attribute mode (e.g. genre): clicking a source drills into its
+        // outgoing flows -> "Oceanus Folk → other genres".
+        graph.focusFlowSource(d.known)
+        return
+      }
       const matching = flows.filter((f) =>
         f.edge_type === d.edge &&
         (d.side === 'left' ? f.source_type === d.known : f.target_type === d.known),
@@ -129,8 +142,8 @@ function load() {
 
 watch(() => graph.graphId, load)
 watch(() => graph.typeFlows, render)
-watch([topN, expanded], () => {
-  if (graph.typeFlows) graph.fetchTypeFlows(topN.value).then(render)
+watch([topN, expanded, () => graph.flowGroupBy, () => graph.flowFocus], () => {
+  if (graph.hasData) graph.fetchTypeFlows(topN.value).then(render)
 })
 onMounted(load)
 </script>
@@ -143,9 +156,29 @@ onMounted(load)
     <div class="flex flex-wrap items-start justify-between gap-2">
       <div>
         <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Graph visualization</p>
-        <h3 class="text-base font-semibold text-slate-900">Sankey — type → relationship → type</h3>
+        <h3 class="text-base font-semibold text-slate-900">
+          Sankey — {{ dimLabel }} → relationship → {{ dimLabel }}
+          <span v-if="graph.flowFocus != null" class="font-normal text-slate-500">· {{ graph.flowFocus }} →</span>
+        </h3>
       </div>
       <div class="flex flex-wrap items-center gap-2">
+        <select
+          v-if="graph.groupableAttrs.length"
+          :value="graph.flowGroupBy"
+          @change="graph.setFlowGroupBy($event.target.value)"
+          class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600"
+        >
+          <option value="Node Type">Group: type</option>
+          <option v-for="a in graph.groupableAttrs" :key="a.key" :value="a.key">Group: {{ a.key }}</option>
+        </select>
+        <button
+          v-if="graph.flowFocus != null"
+          type="button"
+          class="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+          @click="graph.clearFlowFocus()"
+        >
+          ← {{ graph.flowFocus }}
+        </button>
         <select v-model.number="topN" class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600">
           <option :value="8">Top 8</option>
           <option :value="12">Top 12</option>
