@@ -173,6 +173,11 @@ export const useGraphStore = defineStore('graph', () => {
   const flowGroupBy = ref('Node Type')
   const flowFocus = ref(null)
   const groupableAttrs = ref([]) // [{ key, coverage, distinct }] from /node-attributes
+  // Influence ranking: "who is most affected by a seed group" (e.g. top artists
+  // affected by a genre). Generic -- all selectors are passed in.
+  const influenceRanking = ref(null) // { ranking: [{id,label,type,count}], seed_count, affected_count, ... }
+  const influenceLoading = ref(false)
+  const influenceError = ref(null)
 
   async function fetchTypeFlows(top = 12) {
     if (!hasData.value) return
@@ -231,6 +236,37 @@ export const useGraphStore = defineStore('graph', () => {
       else groupableAttrs.value = []
     } catch {
       groupableAttrs.value = []
+    influenceRanking.value = null
+    influenceError.value = null
+    }
+  }
+
+  // Rank the nodes most affected by a seed group. Edge scope reuses whatever
+  // link types are active in the sidebar, so the user narrows to "influence"
+  // edges with the controls they already have -- nothing music-specific here.
+  async function fetchInfluenceRanking(opts = {}) {
+    const { sourceAttr, sourceValue, via = null, direction = 'incoming', top = 12 } = opts
+    if (!hasData.value || !sourceAttr || !sourceValue) return
+    influenceLoading.value = true
+    influenceError.value = null
+    try {
+      const params = new URLSearchParams({
+        source_attr: sourceAttr,
+        source_value: sourceValue,
+        direction,
+        top: String(top),
+      })
+      const edges = filters.value.activeLinkTypes || []
+      if (edges.length) params.set('edges', edges.join(','))
+      if (via) params.set('via', via)
+      const res = await fetch(`${API_BASE}/influence-ranking/${graphId.value}?${params}`)
+      if (!res.ok) throw new Error(`Influence ranking failed (${res.status})`)
+      influenceRanking.value = await res.json()
+    } catch (e) {
+      influenceError.value = e.message
+      influenceRanking.value = null
+    } finally {
+      influenceLoading.value = false
     }
   }
 
@@ -436,12 +472,13 @@ export const useGraphStore = defineStore('graph', () => {
     subgraph, subgraphLoading, subgraphError,
     typeFlows, typeFlowsError,
     flowGroupBy, flowFocus, groupableAttrs,
+    influenceRanking, influenceLoading, influenceError,
     searchResults, searchLoading, selectedNode, egoGraph, egoLoading, egoError,
     timeline, timelineLoading, timelineError, timeDomain,
     geo, geoLoading, geoError,
     loadDataset, loadDefault, toggleNodeType, toggleLinkType,
     fetchSubgraph, fetchTypeFlows, focusTypeFlow, focusTypes,
-    setFlowGroupBy, focusFlowSource, clearFlowFocus, fetchGroupableAttrs,
+    setFlowGroupBy, focusFlowSource, clearFlowFocus, fetchGroupableAttrs, fetchInfluenceRanking,
     searchNodes, selectNode, fetchTimeline, setTimeRange, setInferred, fetchGeo, reset,
   }
 })

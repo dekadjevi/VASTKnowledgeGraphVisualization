@@ -16,6 +16,31 @@ const dimLabel = computed(() => {
   return gb && gb !== 'Node Type' ? gb : 'type'
 })
 
+// Two independent tabs in this card: the flow Sankey, and an influence ranking.
+const tab = ref('flows')
+
+// Ranking-tab controls (generic; defaults aim at the music graph but nothing is hardcoded).
+const rankAttr = ref('')
+const rankValue = ref('')
+const rankVia = ref('')
+const rankDir = ref('incoming')
+watch(
+  () => graph.groupableAttrs,
+  (g) => { if (g.length && !rankAttr.value) rankAttr.value = g[0].key },
+  { immediate: true },
+)
+const ranking = computed(() => graph.influenceRanking?.ranking ?? [])
+const rankMax = computed(() => Math.max(1, ...ranking.value.map((r) => r.count)))
+function runRanking() {
+  graph.fetchInfluenceRanking({
+    sourceAttr: rankAttr.value,
+    sourceValue: rankValue.value.trim(),
+    via: rankVia.value || null,
+    direction: rankDir.value,
+    top: 12,
+  })
+}
+
 function render() {
   const svgEl = svgRef.value
   const data = graph.typeFlows
@@ -156,63 +181,132 @@ onMounted(load)
     <div class="flex flex-wrap items-start justify-between gap-2">
       <div>
         <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Graph visualization</p>
-        <h3 class="text-base font-semibold text-slate-900">
+        <h3 v-if="tab === 'flows'" class="text-base font-semibold text-slate-900">
           Sankey — {{ dimLabel }} → relationship → {{ dimLabel }}
           <span v-if="graph.flowFocus != null" class="font-normal text-slate-500">· {{ graph.flowFocus }} →</span>
         </h3>
+        <h3 v-else class="text-base font-semibold text-slate-900">Influence ranking — who is most affected</h3>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <select
-          v-if="graph.groupableAttrs.length"
-          :value="graph.flowGroupBy"
-          @change="graph.setFlowGroupBy($event.target.value)"
-          class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600"
-        >
-          <option value="Node Type">Group: type</option>
-          <option v-for="a in graph.groupableAttrs" :key="a.key" :value="a.key">Group: {{ a.key }}</option>
-        </select>
-        <button
-          v-if="graph.flowFocus != null"
-          type="button"
-          class="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
-          @click="graph.clearFlowFocus()"
-        >
-          ← {{ graph.flowFocus }}
-        </button>
-        <select v-model.number="topN" class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600">
-          <option :value="8">Top 8</option>
-          <option :value="12">Top 12</option>
-          <option :value="0">All</option>
-        </select>
-        <button
-          type="button"
-          class="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
-          @click="expanded = !expanded"
-        >
-          {{ expanded ? 'Shrink' : 'Expand' }}
-        </button>
+        <div class="flex overflow-hidden rounded-md border border-slate-300 text-xs">
+          <button
+            type="button"
+            class="px-2.5 py-1 font-medium transition"
+            :class="tab === 'flows' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:bg-slate-50'"
+            @click="tab = 'flows'"
+          >Flows</button>
+          <button
+            v-if="graph.groupableAttrs.length"
+            type="button"
+            class="px-2.5 py-1 font-medium transition"
+            :class="tab === 'ranking' ? 'bg-slate-100 text-slate-900' : 'text-slate-500 hover:bg-slate-50'"
+            @click="tab = 'ranking'"
+          >Ranking</button>
+        </div>
+        <template v-if="tab === 'flows'">
+          <select
+            v-if="graph.groupableAttrs.length"
+            :value="graph.flowGroupBy"
+            @change="graph.setFlowGroupBy($event.target.value)"
+            class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600"
+          >
+            <option value="Node Type">Group: type</option>
+            <option v-for="a in graph.groupableAttrs" :key="a.key" :value="a.key">Group: {{ a.key }}</option>
+          </select>
+          <button
+            v-if="graph.flowFocus != null"
+            type="button"
+            class="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+            @click="graph.clearFlowFocus()"
+          >
+            ← {{ graph.flowFocus }}
+          </button>
+          <select v-model.number="topN" class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600">
+            <option :value="8">Top 8</option>
+            <option :value="12">Top 12</option>
+            <option :value="0">All</option>
+          </select>
+          <button
+            type="button"
+            class="rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+            @click="expanded = !expanded"
+          >
+            {{ expanded ? 'Shrink' : 'Expand' }}
+          </button>
+        </template>
       </div>
     </div>
 
-    <p v-if="graph.typeFlowsError" class="mt-2 text-[11px] text-rose-600">{{ graph.typeFlowsError }}</p>
+    <div v-show="tab === 'flows'">
+      <p v-if="graph.typeFlowsError" class="mt-2 text-[11px] text-rose-600">{{ graph.typeFlowsError }}</p>
 
-    <div class="mt-3 rounded-lg border border-slate-200 bg-slate-50">
-      <svg
-        v-show="graph.typeFlows"
-        ref="svgRef"
-        :viewBox="`0 0 820 ${expanded ? 460 : 260}`"
-        class="w-full"
-        :style="{ height: expanded ? '460px' : '260px' }"
-      />
-      <div
-        v-if="!graph.typeFlows"
-        class="flex items-center justify-center px-3 text-center text-xs text-slate-400"
-        :style="{ height: expanded ? '460px' : '260px' }"
-      >
-        Load a dataset to see the type-flow Sankey
+      <div class="mt-3 rounded-lg border border-slate-200 bg-slate-50">
+        <svg
+          v-show="graph.typeFlows"
+          ref="svgRef"
+          :viewBox="`0 0 820 ${expanded ? 460 : 260}`"
+          class="w-full"
+          :style="{ height: expanded ? '460px' : '260px' }"
+        />
+        <div
+          v-if="!graph.typeFlows"
+          class="flex items-center justify-center px-3 text-center text-xs text-slate-400"
+          :style="{ height: expanded ? '460px' : '260px' }"
+        >
+          Load a dataset to see the type-flow Sankey
+        </div>
       </div>
+
+      <p class="mt-2 text-[11px] text-slate-500">{{ caption }}</p>
     </div>
 
-    <p class="mt-2 text-[11px] text-slate-500">{{ caption }}</p>
+    <div v-if="tab === 'ranking'" class="mt-3">
+      <div class="flex flex-wrap items-center gap-2">
+        <select v-model="rankAttr" class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600">
+          <option v-for="a in graph.groupableAttrs" :key="a.key" :value="a.key">{{ a.key }}</option>
+        </select>
+        <input
+          v-model="rankValue"
+          placeholder="value, e.g. Oceanus Folk"
+          class="w-40 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600"
+        />
+        <select v-model="rankVia" class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600">
+          <option value="">roll up: none</option>
+          <option v-for="t in graph.linkTypes" :key="t.key" :value="t.key">via {{ t.key }}</option>
+        </select>
+        <select v-model="rankDir" class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600">
+          <option value="incoming">affected by</option>
+          <option value="outgoing">draws from</option>
+        </select>
+        <button
+          type="button"
+          class="rounded-md border border-slate-300 bg-blue-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+          :disabled="!rankValue.trim() || graph.influenceLoading"
+          @click="runRanking"
+        >
+          {{ graph.influenceLoading ? '…' : 'Rank' }}
+        </button>
+      </div>
+
+      <p class="mt-1 text-[11px] text-slate-400">Edge scope = active link types in the sidebar.</p>
+      <p v-if="graph.influenceError" class="mt-2 text-[11px] text-rose-600">{{ graph.influenceError }}</p>
+
+      <div class="mt-3 space-y-1.5">
+        <div v-for="r in ranking" :key="r.id" class="flex items-center gap-2">
+          <div class="w-28 shrink-0 truncate text-right text-xs text-slate-700" :title="r.label">{{ r.label }}</div>
+          <div class="h-4 flex-1 overflow-hidden rounded bg-slate-100">
+            <div class="h-full rounded bg-emerald-500" :style="{ width: (r.count / rankMax * 100) + '%' }" />
+          </div>
+          <div class="w-6 shrink-0 text-xs font-medium text-slate-700">{{ r.count }}</div>
+        </div>
+      </div>
+
+      <p v-if="graph.influenceRanking && !ranking.length" class="mt-3 text-center text-xs text-slate-400">
+        No matches — check the value, the active link types, or the direction.
+      </p>
+      <p v-else-if="!graph.influenceRanking" class="mt-3 text-center text-xs text-slate-400">
+        Pick an attribute, type a value, optionally a roll-up relation, then Rank.
+      </p>
+    </div>
   </article>
 </template>
