@@ -57,22 +57,26 @@ function clear() {
       </div>
     </section>
 
-    <!-- Link types (T) — client-side filter -->
+    <!-- Link types (T) — client-side filter, same layout as Node types -->
     <section :class="graph.hasData ? '' : 'pointer-events-none opacity-40'">
       <p class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Link types — T</p>
-      <div class="flex flex-wrap gap-1.5">
-        <button
+      <div class="flex flex-col gap-1.5">
+        <label
           v-for="t in graph.linkTypes"
           :key="t.key"
-          type="button"
-          class="rounded-md px-2 py-1 text-[11px] transition"
-          :class="graph.filters.activeLinkTypes.includes(t.key)
-            ? 'bg-sky-100 text-sky-700'
-            : 'bg-slate-100 text-slate-400'"
-          @click="graph.toggleLinkType(t.key)"
+          class="flex cursor-pointer items-center justify-between text-xs text-slate-600"
         >
-          {{ t.label }} <span class="opacity-60">{{ t.count }}</span>
-        </button>
+          <span class="flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              :checked="graph.filters.activeLinkTypes.includes(t.key)"
+              class="accent-sky-600"
+              @change="graph.toggleLinkType(t.key)"
+            />
+            {{ t.label }}
+          </span>
+          <span class="text-slate-400">{{ t.count }}</span>
+        </label>
       </div>
     </section>
 

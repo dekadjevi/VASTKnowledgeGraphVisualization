@@ -1,7 +1,6 @@
 <script setup>
 import { useGraphStore } from '../stores/graph'
 import FilterSidebar from '../components/FilterSidebar.vue'
-import DistributionPanel from '../components/DistributionPanel.vue'
 import DashboardCard from '../components/DashboardCard.vue'
 import NodeLinkView from '../components/NodeLinkView.vue'
 import SankeyView from '../components/SankeyView.vue'
@@ -27,14 +26,6 @@ const cards = [
       <!-- Search strip (top of main area) -->
       <div class="mb-4">
         <SearchBar />
-      </div>
-
-      <!-- Distributions strip (D2) -->
-      <p class="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-        Data distributions — filter feedback
-      </p>
-      <div :class="graph.hasData ? '' : 'opacity-45'">
-        <DistributionPanel />
       </div>
 
       <!-- Visualization grid: live views first, placeholders after -->
