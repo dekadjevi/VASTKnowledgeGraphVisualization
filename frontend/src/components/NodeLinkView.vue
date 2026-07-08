@@ -40,6 +40,11 @@ function render() {
   const svgEl = svgRef.value
   if (!data || !svgEl) return
 
+  // Any real render (manual button, or a Sankey ribbon-click that re-scopes the
+  // filter and refetches) syncs the snapshot, so the "Filters changed" badge
+  // reflects reality. A pure sidebar toggle doesn't render, so it still prompts.
+  lastRendered.value = [...graph.filters.activeNodeTypes]
+
   const nodes = data.nodes.map((d) => ({ ...d }))
   const links = data.links.map((d) => ({ ...d }))
 
@@ -57,35 +62,40 @@ function render() {
   )
 
   const svg = d3.select(svgEl)
-  svg.selectAll('*').remove()
-  const g = svg.append('g')
-  svg.call(d3.zoom().scaleExtent([0.2, 6]).on('zoom', (e) => g.attr('transform', e.transform)))
+  // normalise a link endpoint to its id (it's a string before the force layout
+  // runs, and a node object afterwards).
+  const idOf = (d) => (d && typeof d === 'object' ? d.id : d)
 
-  const link = g
-    .append('g')
-    .attr('stroke', '#94a3b8')
-    .attr('stroke-opacity', 0.45)
+  // Build the persistent layer structure ONCE; on later renders we reuse it and
+  // let D3's data-join (.join) reconcile elements (enter / update / exit) instead
+  // of wiping the whole SVG with selectAll('*').remove().
+  let g = svg.select('g.nl-root')
+  if (g.empty()) {
+    g = svg.append('g').attr('class', 'nl-root')
+    g.append('g').attr('class', 'nl-links').attr('stroke', '#94a3b8').attr('stroke-opacity', 0.45)
+    g.append('g').attr('class', 'nl-nodes').attr('stroke', '#fff').attr('stroke-width', 1)
+    g.append('g').attr('class', 'nl-labels')
+    svg.call(d3.zoom().scaleExtent([0.2, 6]).on('zoom', (e) => g.attr('transform', e.transform)))
+  }
+
+  const link = g.select('g.nl-links')
     .selectAll('line')
-    .data(links)
+    .data(links, (d) => `${idOf(d.source)}|${idOf(d.target)}`)
     .join('line')
     .attr('stroke-width', 1)
 
-  const node = g
-    .append('g')
-    .attr('stroke', '#fff')
-    .attr('stroke-width', 1)
+  const node = g.select('g.nl-nodes')
     .selectAll('circle')
-    .data(nodes)
-    .join('circle')
+    .data(nodes, (d) => d.id)
+    .join((enter) => enter.append('circle').call((c) => c.append('title')))
     .attr('r', (d) => r(d.degree))
     .attr('fill', (d) => color(d.type))
-    .style('cursor', 'pointer')
-    .on('click', (_e, d) => graph.fetchSubgraph({ ego: d.id, radius: 1, limit: limit.value }))
+    .style('cursor', 'grab')
     .on('mouseover', (_e, d) => {
       const near = adj.get(d.id) || new Set()
       node.attr('opacity', (o) => (o.id === d.id || near.has(o.id) ? 1 : 0.12))
       link.attr('stroke-opacity', (l) =>
-        l.source.id === d.id || l.target.id === d.id ? 0.85 : 0.04,
+        idOf(l.source) === d.id || idOf(l.target) === d.id ? 0.85 : 0.04,
       )
       labels.attr('opacity', (o) => (o.id === d.id || near.has(o.id) ? 1 : 0.12))
     })
@@ -113,12 +123,11 @@ function render() {
         }),
     )
 
-  node.append('title').text((d) => `${d.label}\n${d.type} · degree ${d.degree}`)
+  node.select('title').text((d) => `${d.label}\n${d.type} · degree ${d.degree}`)
 
-  const labels = g
-    .append('g')
+  const labels = g.select('g.nl-labels')
     .selectAll('text')
-    .data(nodes.filter((n) => topIds.has(n.id)))
+    .data(nodes.filter((n) => topIds.has(n.id)), (d) => d.id)
     .join('text')
     .text((d) => d.label)
     .attr('font-size', 9)
@@ -197,7 +206,7 @@ onBeforeUnmount(() => simulation && simulation.stop())
     </div>
 
     <p v-if="graph.subgraph?.truncated" class="mt-2 text-[11px] text-amber-600">
-      Showing the top {{ graph.subgraph.node_count }} nodes by degree. Narrow the filter or click a node to focus.
+      Showing a connected sample of {{ graph.subgraph.node_count }} nodes grown from the busiest hubs. Narrow the filter, or use the Ego network card to focus on a node.
     </p>
     <p v-if="graph.subgraphError" class="mt-2 text-[11px] text-rose-600">{{ graph.subgraphError }}</p>
 

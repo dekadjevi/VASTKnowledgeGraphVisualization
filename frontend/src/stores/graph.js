@@ -417,9 +417,11 @@ export const useGraphStore = defineStore('graph', () => {
         params.set('radius', String(radius))
       } else {
         params.set('node_types', filters.value.activeNodeTypes.join(','))
-        if (filters.value.activeLinkTypes.length) {
-          params.set('link_types', filters.value.activeLinkTypes.join(','))
-        }
+        // Always send the link filter, even when empty. Omitting it made the
+        // backend fall back to "all edges", so the diagram drew links while the
+        // header reported 0. Sending an empty value means "no edges", keeping the
+        // drawn graph consistent with the header's edge count.
+        params.set('link_types', filters.value.activeLinkTypes.join(','))
       }
       const [tf, tt] = filters.value.timeRange
       if (tf) params.set('time_from', tf)
