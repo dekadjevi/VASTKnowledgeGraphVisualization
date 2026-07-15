@@ -68,7 +68,8 @@ export const useGraphStore = defineStore('graph', () => {
     const filteredEdges = linkTypes.value
       .filter((t) => filters.value.activeLinkTypes.includes(t.key))
       .reduce((sum, t) => sum + t.count, 0)
-    return {
+
+  return {
       totalNodes: totals.value.nodes,
       totalEdges: totals.value.edges,
       filteredNodes,
@@ -77,6 +78,31 @@ export const useGraphStore = defineStore('graph', () => {
   })
 
   // ---- actions -----------------------------------------------------------
+  // Connected components (community discovery).
+  async function fetchComponents() {
+    if (!hasData.value) return
+    componentsError.value = null
+    try {
+      const params = new URLSearchParams()
+      if (filters.value.activeNodeTypes.length) {
+        params.set('node_types', filters.value.activeNodeTypes.join(','))
+      }
+      params.set('link_types', filters.value.activeLinkTypes.join(','))
+      const [tf, tt] = filters.value.timeRange
+      if (tf) params.set('time_from', tf)
+      if (tt) params.set('time_to', tt)
+      const res = await fetch(`${API_BASE}/components/${graphId.value}?${params}`)
+      components.value = res.ok ? await res.json() : null
+    } catch (e) {
+      componentsError.value = e.message
+      components.value = null
+    }
+  }
+  async function focusComponent(nodeIds) {
+    if (!nodeIds || !nodeIds.length) return
+    await fetchSubgraph({ nodes: nodeIds.join(','), limit: 300 })
+  }
+
   // Fetch the three metadata endpoints for a given id and fill the store.
   async function loadMetadata(id, name) {
     const [nt, et, summary] = await Promise.all([
@@ -173,6 +199,8 @@ export const useGraphStore = defineStore('graph', () => {
   const flowGroupBy = ref('Node Type')
   const flowFocus = ref(null)
   const groupableAttrs = ref([]) // [{ key, coverage, distinct }] from /node-attributes
+  const components = ref(null)      // /components result (community discovery)
+  const componentsError = ref(null)
   // Influence ranking: "who is most affected by a seed group" (e.g. top artists
   // affected by a genre). Generic -- all selectors are passed in.
   const influenceRanking = ref(null) // { ranking: [{id,label,type,count}], seed_count, affected_count, ... }
@@ -401,10 +429,10 @@ export const useGraphStore = defineStore('graph', () => {
   // Fetch a slice from the backend. Filter mode uses the active node types +
   // a node budget; ego mode centers on a node id. Degree is computed on the
   // FULL graph server-side, so the slice isn't structurally distorted.
-  async function fetchSubgraph({ ego = null, radius = 1, limit = 300 } = {}) {
+  async function fetchSubgraph({ ego = null, radius = 1, nodes = null, limit = 300 } = {}) {
     if (!hasData.value) return
-    // Empty selection renders nothing (filter mode); ego mode is exempt.
-    if (!ego && filters.value.activeNodeTypes.length === 0) {
+    // Empty selection renders nothing (filter mode); ego and explicit-nodes modes are exempt.
+    if (!ego && !nodes && filters.value.activeNodeTypes.length === 0) {
       subgraph.value = null
       return
     }
@@ -412,7 +440,10 @@ export const useGraphStore = defineStore('graph', () => {
     subgraphError.value = null
     try {
       const params = new URLSearchParams({ limit: String(limit) })
-      if (ego) {
+      if (nodes) {
+        params.set('nodes', nodes)
+        params.set('link_types', filters.value.activeLinkTypes.join(','))
+      } else if (ego) {
         params.set('ego', ego)
         params.set('radius', String(radius))
       } else {
@@ -480,6 +511,7 @@ export const useGraphStore = defineStore('graph', () => {
     geo, geoLoading, geoError,
     loadDataset, loadDefault, toggleNodeType, toggleLinkType,
     fetchSubgraph, fetchTypeFlows, focusTypeFlow, focusTypes,
+    components, componentsError, fetchComponents, focusComponent,
     setFlowGroupBy, focusFlowSource, clearFlowFocus, fetchGroupableAttrs, fetchInfluenceRanking,
     searchNodes, selectNode, fetchTimeline, setTimeRange, setInferred, fetchGeo, reset,
   }
