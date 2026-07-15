@@ -23,7 +23,6 @@ const tab = ref('flows')
 const rankAttr = ref('')
 const rankValue = ref('')
 const rankVia = ref('')
-const rankDir = ref('incoming')
 watch(
   () => graph.groupableAttrs,
   (g) => { if (g.length && !rankAttr.value) rankAttr.value = g[0].key },
@@ -36,7 +35,7 @@ function runRanking() {
     sourceAttr: rankAttr.value,
     sourceValue: rankValue.value.trim(),
     via: rankVia.value || null,
-    direction: rankDir.value,
+    direction: 'incoming', // always "affected by"
     top: 12,
   })
 }
@@ -47,7 +46,7 @@ function render() {
   if (!svgEl || !data || !data.flows?.length) return
 
   const W = 820
-  const H = expanded.value ? 460 : 260
+  const H = expanded.value ? 460 : 300
   const flows = data.flows
 
   // Three layers: source types -> edge types -> target types (strict DAG).
@@ -273,10 +272,6 @@ onMounted(load)
         <select v-model="rankVia" class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600">
           <option value="">roll up: none</option>
           <option v-for="t in graph.linkTypes" :key="t.key" :value="t.key">via {{ t.key }}</option>
-        </select>
-        <select v-model="rankDir" class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-600">
-          <option value="incoming">affected by</option>
-          <option value="outgoing">draws from</option>
         </select>
         <button
           type="button"
