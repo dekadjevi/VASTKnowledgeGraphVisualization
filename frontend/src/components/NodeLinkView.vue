@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onBeforeUnmount, nextTick } from 'vue'
 import * as d3 from 'd3'
 import { useGraphStore } from '../stores/graph'
 
@@ -22,7 +22,7 @@ const filtersChanged = computed(() => {
   return a.length !== b.length || a.some((t) => !b.includes(t))
 })
 
-const canvasHeight = computed(() => (expanded.value ? '560px' : '150px'))
+const canvasHeight = computed(() => (expanded.value ? '560px' : '300px'))
 
 function colorScale() {
   const types = graph.nodeTypes.map((t) => t.key)
@@ -90,7 +90,7 @@ function render() {
     .join((enter) => enter.append('circle').call((c) => c.append('title')))
     .attr('r', (d) => r(d.degree))
     .attr('fill', (d) => color(d.type))
-    .style('cursor', 'grab')
+    .style('cursor', 'pointer')
     .on('mouseover', (_e, d) => {
       const near = adj.get(d.id) || new Set()
       node.attr('opacity', (o) => (o.id === d.id || near.has(o.id) ? 1 : 0.12))
@@ -103,6 +103,12 @@ function render() {
       node.attr('opacity', 1)
       link.attr('stroke-opacity', 0.45)
       labels.attr('opacity', 1)
+    })
+    .on('click', (_e, d) => {
+      // Coordinated views: clicking a node feeds the Ego card via the SAME store
+      // action the Ego search uses. The node-link's own state (sample + zoom) is
+      // left untouched -- this only re-centres the Ego card on the clicked node.
+      graph.selectNode({ id: d.id, label: d.label, type: d.type })
     })
     .call(
       d3
@@ -138,11 +144,11 @@ function render() {
   simulation = d3
     .forceSimulation(nodes)
     .force('link', d3.forceLink(links).id((d) => d.id).distance(45))
-    .force('charge', d3.forceManyBody().strength(-110))
-    .force('center', d3.forceCenter(W / 2, H / 2))
-    .force('x', d3.forceX(W / 2).strength(0.06))
-    .force('y', d3.forceY(H / 2).strength(0.06))
-    .force('collide', d3.forceCollide().radius((d) => r(d.degree) + 2))
+    .force('charge', d3.forceManyBody().strength(-100))
+    //.force('center', d3.forceCenter(W / 2, H / 2))
+    //.force('x', d3.forceX(W / 2).strength(0.06))
+    //.force('y', d3.forceY(H / 2).strength(0.06))
+    //.force('collide', d3.forceCollide().radius((d) => r(d.degree) + 2))
     .on('tick', () => {
       link
         .attr('x1', (d) => d.source.x)
@@ -154,7 +160,22 @@ function render() {
     })
 }
 
-watch(() => graph.subgraph, render)
+// Render AFTER Vue has patched the DOM 
+watch(() => graph.subgraph, () => nextTick(render), { flush: 'post' })
+
+// Draw once as soon as a dataset is loaded, with a small budget, so the card is
+// never blank. Subsequent redraws stay on demand via the Render button, which
+// keeps the "compose a filter, then draw" model for heavier views.
+watch(
+  () => graph.hasData,
+  async (ready) => {
+    if (!ready || graph.subgraph) return
+    limit.value = 150
+    await renderFilter()
+  },
+  { immediate: true },
+)
+
 onBeforeUnmount(() => simulation && simulation.stop())
 </script>
 
@@ -206,7 +227,7 @@ onBeforeUnmount(() => simulation && simulation.stop())
     </div>
 
     <p v-if="graph.subgraph?.truncated" class="mt-2 text-[11px] text-amber-600">
-      Showing a connected sample of {{ graph.subgraph.node_count }} nodes grown from the busiest hubs. Narrow the filter, or use the Ego network card to focus on a node.
+      Showing a connected sample of {{ graph.subgraph.node_count }} nodes grown from the busiest hubs. Narrow the filter, or click a node to open it in the Ego network card.
     </p>
     <p v-if="graph.subgraphError" class="mt-2 text-[11px] text-rose-600">{{ graph.subgraphError }}</p>
 
