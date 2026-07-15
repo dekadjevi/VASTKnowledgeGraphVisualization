@@ -111,33 +111,22 @@ function clear() {
       </p>
     </section>
 
-    <!-- Properties (P) — visible but disabled until the backend exposes them (D9) -->
-    <section class="pointer-events-none opacity-40">
-      <p class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Properties — P</p>
-      <div class="flex justify-between text-[11px] text-slate-600">
-        <span>Confidence</span>
-        <span class="text-slate-400">0.0 – 1.0</span>
-      </div>
-      <input type="range" min="0" max="1" step="0.1" value="0" disabled class="mt-1.5 w-full accent-sky-600" />
-      <p class="mt-1 text-[10px] italic text-slate-400">needs backend support</p>
-    </section>
-
     <!-- Time range — live once a temporal domain is known; filters all graph views -->
     <section :class="graph.timeDomain.length ? '' : 'pointer-events-none opacity-40'">
       <p class="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Time range</p>
-      <div class="flex items-center gap-2 text-[11px] text-slate-600">
+      <div class="flex items-center gap-1.5 text-[11px] text-slate-600">
         <select
           v-model="from"
-          class="flex-1 rounded-md border border-slate-300 bg-white py-1 text-center"
+          class="min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-1 py-1 text-center"
           @change="apply"
         >
           <option value="">earliest</option>
           <option v-for="k in graph.timeDomain" :key="'f' + k" :value="k">{{ k }}</option>
         </select>
-        <span class="text-slate-400">→</span>
+        <span class="shrink-0 text-slate-400">→</span>
         <select
           v-model="to"
-          class="flex-1 rounded-md border border-slate-300 bg-white py-1 text-center"
+          class="min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-1 py-1 text-center"
           @change="apply"
         >
           <option value="">latest</option>
