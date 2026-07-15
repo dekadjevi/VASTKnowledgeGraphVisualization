@@ -1,7 +1,7 @@
 <script setup>
 import { useGraphStore } from '../stores/graph'
 import FilterSidebar from '../components/FilterSidebar.vue'
-import DashboardCard from '../components/DashboardCard.vue'
+import ComponentsView from '../components/ComponentsView.vue'
 import NodeLinkView from '../components/NodeLinkView.vue'
 import SankeyView from '../components/SankeyView.vue'
 import EgoNetworkView from '../components/EgoNetworkView.vue'
@@ -11,10 +11,6 @@ import SearchBar from '../components/SearchBar.vue'
 
 const graph = useGraphStore()
 
-// Remaining placeholder cards (live views are inlined below).
-const cards = [
-  { title: 'Connected components', subtitle: 'Community discovery', content: 'Overview of connected components, with node/edge counts per component.' },
-]
 </script>
 
 <template>
@@ -39,14 +35,7 @@ const cards = [
         <NodeLinkView />
         <SankeyView />
         <EgoNetworkView />
-        <DashboardCard
-          v-for="card in cards"
-          :key="card.title"
-          :title="card.title"
-          :subtitle="card.subtitle"
-        >
-          {{ card.content }}
-        </DashboardCard>
+        <ComponentsView />
         <div class="rounded-xl border border-slate-200 bg-white p-4">
           <SpatialView />
         </div>
