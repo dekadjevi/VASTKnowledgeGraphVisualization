@@ -91,6 +91,8 @@ export const useGraphStore = defineStore('graph', () => {
       const [tf, tt] = filters.value.timeRange
       if (tf) params.set('time_from', tf)
       if (tt) params.set('time_to', tt)
+      if (filters.value.inferred === 'inferred') params.set('inferred', 'true')
+      else if (filters.value.inferred === 'observed') params.set('inferred', 'false')
       const res = await fetch(`${API_BASE}/components/${graphId.value}?${params}`)
       components.value = res.ok ? await res.json() : null
     } catch (e) {
@@ -405,6 +407,7 @@ export const useGraphStore = defineStore('graph', () => {
   async function setInferred(mode) {
     filters.value.inferred = mode
     await fetchSubgraph({ limit: 300 })
+    fetchComponents()
     if (selectedNode.value) await selectNode(selectedNode.value)
   }
 
